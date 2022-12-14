@@ -1,0 +1,698 @@
+---
+title: "Hurtgen, Final Project STAT 260"
+output: html_notebook
+---
+
+```{r message=FALSE, warning=FALSE}
+library(mosaic)
+library(tidyverse)
+library(readxl)
+```
+
+```{r}
+# df1 is Bachelor's degrees conferred by field of study, 1970 - 2020
+df1 <- read_xls("FOS_1970-2020_mod.xls")
+head(df1)
+view(df1)
+```
+
+```{r}
+# clean up a bit by removing \\1\\, etc.
+nearly_clean_str <- "([:alpha:]|[:space:]|[:punct:])+"
+df1a <- df1 %>% 
+  mutate(`Field of study` = str_extract(`Field of study`, nearly_clean_str)) %>% 
+  # remove newline characters
+  mutate(`Field of study`= str_replace_all(`Field of study`, "[\n]", "")) %>% 
+  # remove backslashes left in using 'punct'
+  mutate(`Field of study`= str_replace_all(`Field of study`, fixed("\\"), "")) %>% 
+  # finally, remove extra spaces
+  mutate(`Field of study` = str_squish(`Field of study`))
+head(df1a)
+# view(df1a)
+```
+
+```{r}
+# add percent change column
+# first, remove rows with zero's in the 1970 column (makes percent change impossible)
+# precision production, transportation/materials moving, other
+df1b <- df1a[-c(27, 32, 34), ]
+percent_change <- rep(0, 31) # dataframe of dummy values
+for (i in 1:nrow(df1b)) {
+  percent_change[i] <- as.numeric(((df1b[i, 19] - df1b[i, 2]) / df1b[i, 2]) * 100)
+}
+
+df1b["percent_change"] <- percent_change
+head(df1b)
+#view(df1b)
+```
+
+```{r}
+# favstats on percent change
+favstats(df1b$percent_change)
+```
+
+```{r}
+# column graph
+# first, reorder by percent change
+df1b_reorder <- df1b %>% 
+  mutate(`Field of study` = fct_reorder(`Field of study`, percent_change))
+plot <- ggplot(data = df1b_reorder, 
+               aes(x = percent_change, y = `Field of study`)) + 
+  geom_col(color = "black", fill = ifelse(percent_change >= 0, "blue", "red")) + 
+  labs(title = "Field of Study by Prcnt Change, 1970 - 2020", 
+       y = "Field of Study", x = "Percent Change")
+plot
+```
+
+
+```{r}
+# top 3 and bottom 3 by percent change graphed together
+# shown as number of degrees conferred
+# top 3: Computers, Homeland, and Parks
+# bottom 3: English, Education, and Library Science
+# also remove percent change
+df1c <- df1b[c(9, 10, 13, 17, 20, 24), -20]
+
+# transpose columns to rows
+df1c_t <- as.data.frame(t(df1c))
+
+# make 1st row column names and remove duplicate
+colnames(df1c_t) <- df1c_t[1, ]
+df1c_t <- df1c_t[-1, ]
+
+# make index a column with name 'Year'
+df1c_t <- rownames_to_column(df1c_t, var = "Year")
+
+# make year ranges one single year (first year of range)
+remove_year_range <- "[:digit:]+"
+df1c_t <- df1c_t %>% 
+  mutate(Year = str_extract(Year, remove_year_range))
+
+# make all columns class integer using apply()
+columns_to_convert <- c(1:7)
+df1c_t[, columns_to_convert] <- apply(df1c_t[, columns_to_convert], 2, 
+                                function(x) as.integer(x))
+
+# pivot long for graphing
+df1c_p <- pivot_longer(data = df1c_t, -Year, names_to = "Degree", 
+                       values_to = "Number_Conferred")
+# head(df1c_p)
+# view(df1c_p)
+
+# plot
+plot1 <- ggplot(data = df1c_p, aes(x = Year, y = Number_Conferred)) + 
+  geom_point() + 
+  geom_line(aes(color = Degree), lwd = 0.75) + 
+  labs(title = "Biggest Winners and Losers", y = "Number of Degrees Conferred") + 
+  theme(legend.position = "right",
+        legend.background = element_rect(
+          color = "black"), 
+        legend.title = element_text(face = "bold"))
+plot1
+```
+
+```{r}
+# side-by-side column graph, 1970 vs 2020
+# eliminate extraneous years
+df1d <- df1a[, c(1, 2, 19)]
+# head(df1d)
+
+# remove 'Total' row
+df1d <- df1d[-1, ]
+
+# pivot again
+df1d_p <- df1d %>% 
+  pivot_longer(-`Field of study`, names_to = "Years", values_to = "Degrees_Conferred")
+# head(df1d_p)
+
+# convert Degrees_Conferred to Thousands
+df1d_p <- df1d_p %>% 
+  mutate(Degrees_Conferred = (Degrees_Conferred / 1000))
+
+plot2 <- ggplot(data = df1d_p, aes(x = `Field of study`, y = Degrees_Conferred, fill = Years)) + 
+  geom_col(position = "dodge", width = 0.5) + 
+  labs(title = "Side by Side, 1970 vs. 2020", y = "Degrees Conferred in Thousands") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.25, hjust = 1))
+plot2
+```
+
+```{r}
+# further comparisons
+# humanities combined vs. computer science
+# humanities (best guess): area, ethnic, etc., english language etc., foreign languages, 
+# legal, philosophy/religious studies, visual/performing arts
+humanities <- df1a[c(4, 13, 15, 18, 25, 33), ]
+# humanities
+
+# sum 1970-71 and 2019-20
+humanities_1970 <- sum(humanities[, 2])
+humanities_2019 <- sum(humanities[, 19])
+# humanities_1970
+# humanities_2019
+
+# vs comp sci
+cs_1970 <- df1a[9, 2]
+cs_2019 <- df1a[9, 19]
+# cs_1970
+# cs_2019
+
+# together
+field <- c("Humanities", "Humanities", "Computer Science", "Computer Science")
+year <- c("1970-71", "2019-20", "1970-71", "2019-20")
+degrees_conferred <- c(126569, 170591, 2388, 97047)
+hm_vs_cs <- tibble(field, year, degrees_conferred)
+# hm_vs_cs
+
+# side-by-side plots
+plot_hm_vs_cs <- ggplot(data = hm_vs_cs, 
+                        aes(x = field, y = degrees_conferred, fill = year)) + 
+  geom_col(position = "dodge", width = 0.5) + 
+  labs(title = "Comparing Humanities and Computer Science", y = "Degrees Conferred", 
+       x = "Field") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.25, hjust = 1))
+plot_hm_vs_cs
+```
+
+```{r}
+# same idea, S&E vs. humanities
+# S&E fields, best guess: Agriculture etc., biological etc., 
+# computer, engineering, math, physical
+sci_eng <- df1a[c(2, 5, 9, 11, 21, 26), ]
+# sci_eng
+se_1970 <- sum(sci_eng[, 2])
+se_2019 <- sum(sci_eng[, 19])
+# se_1970
+# se_2019
+
+# together
+field1 <- c("Humanities", "Humanities", "S&E", "S&E")
+year1 <- c("1970-71", "2019-20", "1970-71", "2019-20")
+degrees_conferred1 <- c(126569, 170591, 142012, 451771)
+hm_vs_se <- tibble(field1, year1, degrees_conferred1)
+# divide degrees_conferred1 by 1000 for visualization purposes
+hm_vs_se <- hm_vs_se %>% 
+  mutate(degrees_conferred1 = degrees_conferred1 / 1000)
+# hm_vs_se
+
+# side-by-side plots
+plot_hm_vs_se <- ggplot(data = hm_vs_se, 
+                        aes(x = field1, y = degrees_conferred1, fill = year1)) + 
+  geom_col(position = "dodge", width = 0.5) + 
+  labs(title = "Comparing Humanities and S&E", y = "Degrees Conferred (Thousands)", 
+       x = "Field") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.25, hjust = 1))
+plot_hm_vs_se
+```
+
+```{r}
+# different data set for most of the chunks that follow...
+# df2 is number employed by field of study with a focus on 
+# Science and Engineering
+# years 2003 - 20019, broken down by sex, ethnicity, race
+df2 <- read_xlsx("SE_2003-2019_mod.xlsx")
+head(df2)
+view(df2)
+```
+
+```{r message=FALSE, warning=FALSE}
+# df2 needs to be broken into several tables because its already 'grouped',
+# resulting in ostensibly duplicated rows that are in fact distinct by
+# gender, race, etc...
+
+# first, convert all year columns to type integer
+columns_to_convert1 <- c(2:7)
+df2[, columns_to_convert1] <- apply(df2[, columns_to_convert1], 2, 
+                                function(x) as.integer(x))
+
+# female totals
+df2_f <- df2[73:81, ]
+df2_f <- df2_f %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "Female", sep = ", "))
+df2_f[1, 1] <- "Total, Female"
+# df2_f
+```
+
+```{r}
+# hispanic/latino, female
+df2_hl_f <- df2[82:90, ]
+df2_hl_f <- df2_hl_f %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "H/L, Female", sep = ", "))
+df2_hl_f[1, 1] <- "Hispanic or Latino Total, Female"
+# df2_hl_f
+```
+
+```{r}
+# american indian/alaska native
+df2_aa_f <- df2[91:99, ]
+df2_aa_f <- df2_aa_f %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "AI/A, Female", sep = ", "))
+df2_aa_f[1, 1] <- "American Indian or Alaska Native Total, Female"
+# df2_aa_f
+```
+
+```{r}
+# asian
+df2_as_f <- df2[100:108, ]
+df2_as_f <- df2_as_f %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "Asian, Female", sep = ", "))
+df2_as_f[1, 1] <- "Asian Total, Female"
+# df2_as_f
+```
+
+```{r}
+# black/african american
+df2_ba_f <- df2[109:117, ]
+df2_ba_f <- df2_ba_f %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "Black/African American, Female", sep = ", "))
+df2_ba_f[1, 1] <- "Black or African American Total, Female"
+# df2_ba_f
+```
+
+```{r}
+# pacific islander
+df2_pi_f <- df2[118:126, ]
+df2_pi_f <- df2_pi_f %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "NH/PI, Female", sep = ", "))
+df2_pi_f[1, 1] <- "Native Hawaiian or Other Pacific Islander Total, Female"
+# df2_pi_f
+```
+
+```{r}
+# white
+df2_w_f <- df2[127:135, ]
+df2_w_f <- df2_w_f %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "White, Female", sep = ", "))
+df2_w_f[1, 1] <- "White Total, Female"
+# df2_w_f
+```
+
+```{r}
+# more than one race
+df2_mr_f <- df2[136:144, ]
+df2_mr_f <- df2_mr_f %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "MR, Female", sep = ", "))
+df2_mr_f[1, 1] <- "More than one race Total, Female"
+# df2_mr_f
+```
+
+```{r}
+# now for males
+
+# male totals
+df2_m <- df2[145:153, ]
+df2_m <- df2_m %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "Male", sep = ", "))
+df2_m[1, 1] <- "Total, Male"
+# df2_m
+```
+
+```{r}
+# hispanic/latino, male
+# error in the 2003 column... impossible to know where, but
+# 'S&E occupations' should be a total of the 5 rows beneath it...
+# 142,000 should be 143,000... no fixing this since I don't know
+# what figure is incorrect
+df2_hl_m <- df2[154:162, ]
+df2_hl_m <- df2_hl_m %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "H/L, Male", sep = ", "))
+df2_hl_m[1, 1] <- "Hispanic or Latino Total, Male"
+# df2_hl_m
+```
+
+```{r}
+# american indian/alaska native
+df2_aa_m <- df2[163:171, ]
+df2_aa_m <- df2_aa_m %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "AI/A, Male", sep = ", "))
+df2_aa_m[1, 1] <- "American Indian or Alaska Native Total, Male"
+# df2_aa_m
+```
+
+```{r}
+# asian
+df2_as_m <- df2[172:180, ]
+df2_as_m <- df2_as_m %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "Asian, Male", sep = ", "))
+df2_as_m[1, 1] <- "Asian Total, Male"
+# df2_as_m
+```
+
+```{r}
+# black/african american
+df2_ba_m <- df2[181:189, ]
+df2_ba_m <- df2_ba_m %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "Black/African American, Male", sep = ", "))
+df2_ba_m[1, 1] <- "Black or African American Total, Male"
+# df2_ba_m
+```
+
+```{r}
+# pacific islander
+df2_pi_m <- df2[190:198, ]
+df2_pi_m <- df2_pi_m %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "NH/PI, Male", sep = ", "))
+df2_pi_m[1, 1] <- "Native Hawaiian or Other Pacific Islander Total, Male"
+# df2_pi_m
+```
+
+```{r}
+# white
+df2_w_m <- df2[199:207, ]
+df2_w_m <- df2_w_m %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "White, Male", sep = ", "))
+df2_w_m[1, 1] <- "White Total, Male"
+# df2_w_m
+```
+
+```{r}
+# more than one race
+df2_mr_m <- df2[208:216, ]
+df2_mr_m <- df2_mr_m %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           str_c(`Sex, ethnicity, race, and occupation`, "MR, Male", sep = ", "))
+df2_mr_m[1, 1] <- "More than one race Total, Male"
+# df2_mr_m
+```
+```{r}
+# as one big dataframe by gender and race/ethnicity...
+# leaving out aa, pi, and mr because of 'suppressed' values
+# also leaving out totals of each and S&E totals (leaving as broken down)
+dataframes <- list(df2_as_f[3:9, ], df2_ba_f[3:9, ], df2_w_f[3:9, ], df2_hl_m[3:9, ], 
+                   df2_as_m[3:9, ], df2_ba_m[3:9, ], df2_w_m[3:9, ])
+df2_combined <- df2_hl_f[3:9, ]
+
+# for loop to avoid manually adding every dataframe
+for (i in 1:length(dataframes)) {
+  df2_combined <- union(df2_combined, dataframes[[i]])
+}
+
+head(df2_combined)
+```
+
+```{r}
+# add percent change column
+percent_change1 <- rep(0, nrow(df2_combined)) # dataframe of dummy values
+for (i in 1:nrow(df2_combined)) {
+  percent_change1[i] <- as.numeric(((df2_combined[i, 7] - df2_combined[i, 2]) / df2_combined[i, 2]) * 100)
+}
+
+df2_combined["percent_change"] <- percent_change1
+head(df2_combined)
+```
+
+```{r}
+# column graph of top 10 and bottom 10 'movers'
+top_bottom_vector <- c(1:10, 47:56)
+df2_top_bottom <- df2_combined %>% 
+  arrange(percent_change)
+
+# reorder
+df2_top_bottom_reorder <- df2_top_bottom[top_bottom_vector, ] %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           fct_reorder(`Sex, ethnicity, race, and occupation`, percent_change))
+
+plot3 <- ggplot(data = df2_top_bottom_reorder, 
+                aes(x = percent_change, y = `Sex, ethnicity, race, and occupation`)) + 
+  geom_col(color = "black", fill = "blue") + 
+  labs(title = "Top 10, Bottom 10 Movers", y = "Sex, Ethnicity/Race, and Occupation", 
+       x = "Percent Change")
+plot3
+```
+
+```{r}
+# hmm, this may be more informative if we use S&E totals instead of broken down by subject...
+# leaving out aa, pi, and mr because of 'suppressed' values
+dataframes_alt <- list(df2_as_f[c(2, 8, 9), ], df2_ba_f[c(2, 8, 9), ], 
+                       df2_w_f[c(2, 8, 9), ], df2_hl_m[c(2, 8, 9), ], 
+                       df2_as_m[c(2, 8, 9), ], df2_ba_m[c(2, 8, 9), ], 
+                       df2_w_m[c(2, 8, 9), ])
+df2_combined_alt <- df2_hl_f[c(2, 8, 9), ]
+
+for (i in 1:length(dataframes_alt)) {
+  df2_combined_alt <- union(df2_combined_alt, dataframes_alt[[i]])
+}
+
+head(df2_combined_alt)
+```
+
+```{r}
+# add percent change column
+percent_change2 <- rep(0, nrow(df2_combined_alt)) # dataframe of dummy values
+for (i in 1:nrow(df2_combined_alt)) {
+  percent_change2[i] <- as.numeric(((df2_combined_alt[i, 7] - df2_combined_alt[i, 2]) / df2_combined_alt[i, 2]) * 100)
+}
+
+df2_combined_alt["percent_change"] <- percent_change2
+head(df2_combined_alt)
+```
+
+```{r}
+# now let's look at the column graph of all records...
+df2_ca_reorder <- df2_combined_alt %>% 
+  mutate(`Sex, ethnicity, race, and occupation` = 
+           fct_reorder(`Sex, ethnicity, race, and occupation`, percent_change))
+
+plot4 <- ggplot(data = df2_ca_reorder, 
+                aes(x = percent_change, y = `Sex, ethnicity, race, and occupation`)) + 
+  geom_col(color = "black", fill = "blue") + 
+  labs(title = "Occupation by Percent Change, 2003 - 2019", x = "Percent Change")
+plot4
+```
+
+```{r}
+# try some pie charts here, df's must be same occupation field
+# with a row for each race/ethnicity
+# S&E...
+
+# first, change problematic row names
+# this solution is pretty clumsy but having dates as 
+# column names is giving me headaches...
+df2_pie_all <- df2_combined_alt[, -8]
+colnames(df2_pie_all) <-c("Sex, ethnicity, race, and occupation", "Three", "Ten", 
+                          "Thirteen", "Fifteen", "Seventeen", "Nineteen")
+
+
+df2_pie_s_and_e <- df2_pie_all[c(1, 4, 7, 10, 13, 16, 19, 22), ]
+# df2_pie_stem
+
+plot5 <- ggplot(data = df2_pie_s_and_e, 
+                aes(x = "", y = Three, fill = `Sex, ethnicity, race, and occupation`)) + 
+  geom_bar(stat = "identity", width = 1, color = "white") + 
+  coord_polar("y", start = 0) + theme_void() + 
+  labs(title = "S&E Occupations by Sex, Ethinicity/Race, 2003")
+plot5
+
+plot6 <- ggplot(data = df2_pie_s_and_e, 
+                aes(x = "", y = Nineteen, fill = `Sex, ethnicity, race, and occupation`)) + 
+  geom_bar(stat = "identity", width = 1, color = "white") + 
+  coord_polar("y", start = 0) + theme_void() + 
+  labs(title = "S&E Occupations by Sex, Ethinicity/Race, 2019")
+plot6
+```
+
+```{r}
+# shifting to more generalized views from here forward...
+# totals (both sexes, all races/ethnicities)
+df2_totals <- df2[1:9, ]
+df2_totals
+```
+
+```{r}
+# removing sex, ethnicity/race divisions within occupations
+df2_totals1 <- df2_totals[c(2, 8, 9), ] %>% 
+  rename(Occupation = `Sex, ethnicity, race, and occupation`)
+df2_totals1
+
+```
+
+```{r}
+# add percent change column
+percent_change3 <- rep(0, nrow(df2_totals1)) # dataframe of dummy values
+for (i in 1:nrow(df2_totals1)) {
+  percent_change3[i] <- as.numeric(((df2_totals1[i, 7] - df2_totals1[i, 2]) / df2_totals1[i, 2]) * 100)
+}
+
+df2_totals1["percent_change"] <- percent_change3
+head(df2_totals1)
+```
+
+```{r}
+# column graph
+df2_totals1_reorder <- df2_totals1 %>% 
+  mutate(Occupation = fct_reorder(Occupation, percent_change))
+
+plot7 <- ggplot(data = df2_totals1_reorder, aes(x = percent_change, y = Occupation)) + 
+  geom_col(color = "black", fill = "blue") + 
+  labs(title = "Occupation by Percent Change, 2003 - 2019", x = "Percent Change")
+plot7
+```
+
+```{r}
+# line graphs of same
+# remove percent change
+df2_totals1a <- df2_totals1[, -8]
+
+# transpose columns to rows
+df2_totals1a_t <- as.data.frame(t(df2_totals1a))
+
+# make 1st row column names and remove duplicate
+colnames(df2_totals1a_t) <- df2_totals1a_t[1, ]
+df2_totals1a_t <- df2_totals1a_t[-1, ]
+
+# make index a column with name 'Year'
+df2_totals1a_t <- rownames_to_column(df2_totals1a_t, var = "Year")
+# df2_totals1a_t
+
+# make all columns class integer
+columns_to_convert2 <- c(1:4)
+df2_totals1a_t[, columns_to_convert2] <- apply(df2_totals1a_t[, columns_to_convert2], 2, 
+                                function(x) as.integer(x))
+
+# pivot long for graphing
+df2_totals1a_p <- pivot_longer(data = df2_totals1a_t, -Year, 
+                               names_to = "Occupation", values_to = "Number_Employed")
+#df2_totals1a_p
+
+# divide Number_Employed by one million for easier viewing
+df2_totals1a_p <- df2_totals1a_p %>% 
+  mutate(Number_Employed = Number_Employed / 1000000)
+
+# plot
+plot8 <- ggplot(data = df2_totals1a_p, aes(x = Year, y = Number_Employed)) + 
+  geom_point() + 
+  geom_line(aes(color = Occupation), lwd = 0.75) + 
+  scale_x_continuous(breaks = c(2003, 2005, 2007, 2009, 2011, 2013, 2015, 2017, 2019)) +  
+  labs(title = "Number Employed, 2003 - 2019", y = "Number Employed (Millions)") + 
+  theme(legend.position = "right",
+        legend.background = element_rect(
+          color = "black"), 
+        legend.title = element_text(face = "bold"))
+plot8
+```
+
+```{r}
+# even more generalized... combining S&E-related and Non-S&E
+# add row of combined S&E related and Non-S&E
+df2_totals2 <- df2_totals1
+df2_totals2[4, ] <- list("All Non-S&E occupations", 27986000, 35248000, 
+                         38074000, 39534000, 41454000, 43058000, 53.85540)
+df2_totals2 <- df2_totals2[c(1, 4), ]
+df2_totals2
+```
+
+```{r}
+# column graph
+df2_totals2_reorder <- df2_totals2 %>% 
+  mutate(Occupation = fct_reorder(Occupation, percent_change))
+
+plot9 <- ggplot(data = df2_totals2_reorder, aes(x = percent_change, y = Occupation)) + 
+  geom_col(color = "black", fill = "blue") + 
+  labs(title = "Occupation by Percent Change, 2003 - 2019", x = "Percent Change")
+plot9
+```
+
+```{r}
+# finally, attempting to reconcile df1 and df2
+# comparing S&E field degrees conferred against S&E employment
+# S&E fields, best guess based on breakdown from second data set: 
+# agriculture, biological, computer, engineering, math/stats, physical, social
+s_and_e <- c(2, 5, 9, 11, 21, 26, 30)
+# S&E only, 2000 on, from first data set (degrees conferred)
+df1d <- df1a[s_and_e, c(1, 8:19)]
+
+# percent change adjusted
+percent_change4 <- rep(0, nrow(df1d)) # dataframe of dummy values
+for (i in 1:nrow(df1d)) {
+  percent_change4[i] <- as.numeric(((df1d[i, 13] - df1d[i, 2]) / df1d[i, 2]) * 100)
+} 
+
+
+df1d["percent_change"] <- percent_change4
+df1d
+```
+
+```{r}
+# taking totals and calculating percent change
+start_total <- sum(df1d[2])
+end_total <- sum(df1d[13])
+
+# NOTE: this percent change a bit higher than from df2 S&E totals
+# Not way off (63% vs 78%) but off by enough to wonder if some of the 
+# gap is due to jobs being filled by people who did not receive their
+# bachelor's degree in the U.S.
+percent_change_s_and_e <- (end_total - start_total) / start_total * 100
+percent_change_s_and_e
+```
+
+```{r}
+# Non-S&E
+non_s_and_e <- c(3, 4, 6, 7, 8, 10, 12, 13:20, 22:25, 27:29, 31, 32, 33)
+
+# 2000 on
+df1e <- df1a[non_s_and_e, c(1, 8:19)]
+
+# percent change adjusted
+percent_change5 <- rep(0, nrow(df1e))
+for (i in 1:nrow(df1d)) {
+  percent_change5[i] <- as.numeric(((df1e[i, 13] - df1e[i, 2]) / df1e[i, 2]) * 100)
+} 
+
+
+df1e["percent_change"] <- percent_change5
+df1e
+```
+
+```{r}
+# taking totals and calculating percent change
+start_total1 <- sum(df1e[2])
+end_total1 <- sum(df1e[13])
+
+# NOTE: similar to above, higher prct change value than from df2 but not way off (54% vs 58%)
+percent_change_non_s_and_e <- (end_total1 - start_total1) / start_total1 * 100
+percent_change_non_s_and_e
+```
+
+```{r}
+# this function not in use, kept it around for possible later use
+transpose_data <- function(df) {
+  # transposes a dataframe and outputs a graph of
+  # S&E occupation numbers vs Non-S&E occupation numbers
+  transposed <- as.data.frame(t(df))
+  colnames(transposed) <- transposed[1, ]
+  transposed <- transposed[-1, ] %>% 
+    select(`S&E occupations`, `Non-S&E occupations`) 
+  transposed <- rownames_to_column(transposed, var = "Year") 
+  transposed <- transposed %>% 
+    mutate(Year = as.integer(Year), `S&E occupations` = as.integer(`S&E occupations`) / 1000, 
+           `Non-S&E occupations` = as.integer(`Non-S&E occupations`) / 1000)
+  transposed <- pivot_longer(data = transposed, -Year, names_to = "S&E or not", values_to = "Occupations")
+  plot <- ggplot(data = transposed, aes(x = Year, y = Occupations)) +
+    geom_point() +
+    geom_line(aes(color = `S&E or not`))
+  return(plot)
+}
+```
+
+```{r}
+# transpose_data(df2_f)
+```
+
+```{r}
+# transpose_data(df2_m)
+```
+
