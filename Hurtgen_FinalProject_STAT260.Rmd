@@ -1,6 +1,8 @@
 ---
 title: "Hurtgen, Final Project STAT 260"
-output: html_notebook
+output:
+  word_document: default
+  html_notebook: default
 ---
 
 ```{r message=FALSE, warning=FALSE}
@@ -10,10 +12,13 @@ library(readxl)
 ```
 
 ```{r}
-# df1 is Bachelor's degrees conferred by field of study, 1970 - 2020
+# Analysis of Bachelor's Degrees conferred and employment data over time
+# See abstract for more detail
+
+# df1 is Bachelor's Degrees conferred by field of study, 1970 - 2020
 df1 <- read_xls("FOS_1970-2020_mod.xls")
 head(df1)
-view(df1)
+# view(df1)
 ```
 
 ```{r}
@@ -43,7 +48,8 @@ for (i in 1:nrow(df1b)) {
 
 df1b["percent_change"] <- percent_change
 head(df1b)
-#view(df1b)
+# write_csv(df1b, "DFtoCSV/df1b.csv")
+# view(df1b)
 ```
 
 ```{r}
@@ -56,6 +62,8 @@ favstats(df1b$percent_change)
 # first, reorder by percent change
 df1b_reorder <- df1b %>% 
   mutate(`Field of study` = fct_reorder(`Field of study`, percent_change))
+
+# graph shows blue for positive percent change, red for negative
 plot <- ggplot(data = df1b_reorder, 
                aes(x = percent_change, y = `Field of study`)) + 
   geom_col(color = "black", fill = ifelse(percent_change >= 0, "blue", "red")) + 
@@ -67,10 +75,10 @@ plot
 
 ```{r}
 # top 3 and bottom 3 by percent change graphed together
-# shown as number of degrees conferred
+# shown as number of degrees conferred by year
 # top 3: Computers, Homeland, and Parks
 # bottom 3: English, Education, and Library Science
-# also remove percent change
+# also, remove percent change
 df1c <- df1b[c(9, 10, 13, 17, 20, 24), -20]
 
 # transpose columns to rows
@@ -84,6 +92,7 @@ df1c_t <- df1c_t[-1, ]
 df1c_t <- rownames_to_column(df1c_t, var = "Year")
 
 # make year ranges one single year (first year of range)
+# can't treat convert to integer otherwise
 remove_year_range <- "[:digit:]+"
 df1c_t <- df1c_t %>% 
   mutate(Year = str_extract(Year, remove_year_range))
@@ -98,6 +107,7 @@ df1c_p <- pivot_longer(data = df1c_t, -Year, names_to = "Degree",
                        values_to = "Number_Conferred")
 # head(df1c_p)
 # view(df1c_p)
+# write_csv(df1c_p, "DFtoCSV/df1c_p.csv")
 
 # plot
 plot1 <- ggplot(data = df1c_p, aes(x = Year, y = Number_Conferred)) + 
@@ -117,21 +127,22 @@ plot1
 df1d <- df1a[, c(1, 2, 19)]
 # head(df1d)
 
-# remove 'Total' row
+# remove 'Total' row (throws off scale)
 df1d <- df1d[-1, ]
 
 # pivot again
 df1d_p <- df1d %>% 
   pivot_longer(-`Field of study`, names_to = "Years", values_to = "Degrees_Conferred")
 # head(df1d_p)
+# write_csv(df1d_p, "DFtoCSV/df1d_p.csv")
 
-# convert Degrees_Conferred to Thousands
+# convert Degrees_Conferred to Thousands for viewing
 df1d_p <- df1d_p %>% 
   mutate(Degrees_Conferred = (Degrees_Conferred / 1000))
 
 plot2 <- ggplot(data = df1d_p, aes(x = `Field of study`, y = Degrees_Conferred, fill = Years)) + 
   geom_col(position = "dodge", width = 0.5) + 
-  labs(title = "Side by Side, 1970 vs. 2020", y = "Degrees Conferred in Thousands") +
+  labs(title = "Side by Side, 1970 vs. 2020", y = "Degrees Conferred (Thousands)") +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.25, hjust = 1))
 plot2
 ```
@@ -161,6 +172,7 @@ field <- c("Humanities", "Humanities", "Computer Science", "Computer Science")
 year <- c("1970-71", "2019-20", "1970-71", "2019-20")
 degrees_conferred <- c(126569, 170591, 2388, 97047)
 hm_vs_cs <- tibble(field, year, degrees_conferred)
+# write_csv(hm_vs_cs, "DFtoCSV/hm_vs_cs.csv")
 # hm_vs_cs
 
 # side-by-side plots
@@ -189,6 +201,8 @@ field1 <- c("Humanities", "Humanities", "S&E", "S&E")
 year1 <- c("1970-71", "2019-20", "1970-71", "2019-20")
 degrees_conferred1 <- c(126569, 170591, 142012, 451771)
 hm_vs_se <- tibble(field1, year1, degrees_conferred1)
+# write_csv(hm_vs_se, "DFtoCSV/hm_vs_se.csv")
+
 # divide degrees_conferred1 by 1000 for visualization purposes
 hm_vs_se <- hm_vs_se %>% 
   mutate(degrees_conferred1 = degrees_conferred1 / 1000)
@@ -211,7 +225,7 @@ plot_hm_vs_se
 # years 2003 - 20019, broken down by sex, ethnicity, race
 df2 <- read_xlsx("SE_2003-2019_mod.xlsx")
 head(df2)
-view(df2)
+# view(df2)
 ```
 
 ```{r message=FALSE, warning=FALSE}
@@ -388,10 +402,11 @@ df2_mr_m <- df2_mr_m %>%
 df2_mr_m[1, 1] <- "More than one race Total, Male"
 # df2_mr_m
 ```
+
 ```{r}
 # as one big dataframe by gender and race/ethnicity...
-# leaving out aa, pi, and mr because of 'suppressed' values
-# also leaving out totals of each and S&E totals (leaving as broken down)
+# NOTE: leaving out aa, pi, and mr because of 'suppressed' (NA) values
+# also leaving out totals of each and S&E totals (leaving S&E as broken down)
 dataframes <- list(df2_as_f[3:9, ], df2_ba_f[3:9, ], df2_w_f[3:9, ], df2_hl_m[3:9, ], 
                    df2_as_m[3:9, ], df2_ba_m[3:9, ], df2_w_m[3:9, ])
 df2_combined <- df2_hl_f[3:9, ]
@@ -407,6 +422,7 @@ head(df2_combined)
 ```{r}
 # add percent change column
 percent_change1 <- rep(0, nrow(df2_combined)) # dataframe of dummy values
+
 for (i in 1:nrow(df2_combined)) {
   percent_change1[i] <- as.numeric(((df2_combined[i, 7] - df2_combined[i, 2]) / df2_combined[i, 2]) * 100)
 }
@@ -416,7 +432,7 @@ head(df2_combined)
 ```
 
 ```{r}
-# column graph of top 10 and bottom 10 'movers'
+# column graph of top 10 and bottom 10 'movers' by percent change
 top_bottom_vector <- c(1:10, 47:56)
 df2_top_bottom <- df2_combined %>% 
   arrange(percent_change)
@@ -425,6 +441,7 @@ df2_top_bottom <- df2_combined %>%
 df2_top_bottom_reorder <- df2_top_bottom[top_bottom_vector, ] %>% 
   mutate(`Sex, ethnicity, race, and occupation` = 
            fct_reorder(`Sex, ethnicity, race, and occupation`, percent_change))
+# write_csv(df2_top_bottom_reorder, "DFtoCSV/df2_top_bottom_reorder.csv")
 
 plot3 <- ggplot(data = df2_top_bottom_reorder, 
                 aes(x = percent_change, y = `Sex, ethnicity, race, and occupation`)) + 
@@ -459,6 +476,7 @@ for (i in 1:nrow(df2_combined_alt)) {
 
 df2_combined_alt["percent_change"] <- percent_change2
 head(df2_combined_alt)
+# write_csv(df2_combined_alt, "DFtoCSV/df2_combined_alt.csv")
 ```
 
 ```{r}
@@ -475,9 +493,8 @@ plot4
 ```
 
 ```{r}
-# try some pie charts here, df's must be same occupation field
+# try some pie charts here of S&E
 # with a row for each race/ethnicity
-# S&E...
 
 # first, change problematic row names
 # this solution is pretty clumsy but having dates as 
@@ -488,6 +505,7 @@ colnames(df2_pie_all) <-c("Sex, ethnicity, race, and occupation", "Three", "Ten"
 
 
 df2_pie_s_and_e <- df2_pie_all[c(1, 4, 7, 10, 13, 16, 19, 22), ]
+# write_csv(df2_pie_s_and_e, "DFtoCSV/df2_pie_s_and_e.csv")
 # df2_pie_stem
 
 plot5 <- ggplot(data = df2_pie_s_and_e, 
@@ -517,7 +535,6 @@ df2_totals
 df2_totals1 <- df2_totals[c(2, 8, 9), ] %>% 
   rename(Occupation = `Sex, ethnicity, race, and occupation`)
 df2_totals1
-
 ```
 
 ```{r}
@@ -529,6 +546,7 @@ for (i in 1:nrow(df2_totals1)) {
 
 df2_totals1["percent_change"] <- percent_change3
 head(df2_totals1)
+# write_csv(df2_totals1, "DFtoCSV/df2_totals1.csv")
 ```
 
 ```{r}
@@ -566,7 +584,9 @@ df2_totals1a_t[, columns_to_convert2] <- apply(df2_totals1a_t[, columns_to_conve
 # pivot long for graphing
 df2_totals1a_p <- pivot_longer(data = df2_totals1a_t, -Year, 
                                names_to = "Occupation", values_to = "Number_Employed")
-#df2_totals1a_p
+# df2_totals1a_p
+# write_csv(df2_totals1a_p, "DFtoCSV/df2_totals1a_p.csv")
+
 
 # divide Number_Employed by one million for easier viewing
 df2_totals1a_p <- df2_totals1a_p %>% 
@@ -587,12 +607,14 @@ plot8
 
 ```{r}
 # even more generalized... combining S&E-related and Non-S&E
-# add row of combined S&E related and Non-S&E
+# add row of combined S&E-related and Non-S&E
+# totals are calculated  manually
 df2_totals2 <- df2_totals1
 df2_totals2[4, ] <- list("All Non-S&E occupations", 27986000, 35248000, 
                          38074000, 39534000, 41454000, 43058000, 53.85540)
 df2_totals2 <- df2_totals2[c(1, 4), ]
 df2_totals2
+# write_csv(df2_totals2, "DFtoCSV/df2_totals2.csv")
 ```
 
 ```{r}
@@ -612,6 +634,7 @@ plot9
 # S&E fields, best guess based on breakdown from second data set: 
 # agriculture, biological, computer, engineering, math/stats, physical, social
 s_and_e <- c(2, 5, 9, 11, 21, 26, 30)
+
 # S&E only, 2000 on, from first data set (degrees conferred)
 df1d <- df1a[s_and_e, c(1, 8:19)]
 
@@ -621,8 +644,8 @@ for (i in 1:nrow(df1d)) {
   percent_change4[i] <- as.numeric(((df1d[i, 13] - df1d[i, 2]) / df1d[i, 2]) * 100)
 } 
 
-
 df1d["percent_change"] <- percent_change4
+# write_csv(df1d, "DFtoCSV/df1d.csv")
 df1d
 ```
 
@@ -632,9 +655,7 @@ start_total <- sum(df1d[2])
 end_total <- sum(df1d[13])
 
 # NOTE: this percent change a bit higher than from df2 S&E totals
-# Not way off (63% vs 78%) but off by enough to wonder if some of the 
-# gap is due to jobs being filled by people who did not receive their
-# bachelor's degree in the U.S.
+# Not way off (63% vs 78%) but off by enough to be interesting!
 percent_change_s_and_e <- (end_total - start_total) / start_total * 100
 percent_change_s_and_e
 ```
@@ -648,12 +669,12 @@ df1e <- df1a[non_s_and_e, c(1, 8:19)]
 
 # percent change adjusted
 percent_change5 <- rep(0, nrow(df1e))
-for (i in 1:nrow(df1d)) {
+for (i in 1:nrow(df1e)) {
   percent_change5[i] <- as.numeric(((df1e[i, 13] - df1e[i, 2]) / df1e[i, 2]) * 100)
 } 
 
-
 df1e["percent_change"] <- percent_change5
+# write_csv(df1e, "DFtoCSV/df1e.csv")
 df1e
 ```
 
@@ -662,7 +683,8 @@ df1e
 start_total1 <- sum(df1e[2])
 end_total1 <- sum(df1e[13])
 
-# NOTE: similar to above, higher prct change value than from df2 but not way off (54% vs 58%)
+# NOTE: similar to above, higher prct change value than from df2 but
+# much closer than S&E differences (54% vs 58%)
 percent_change_non_s_and_e <- (end_total1 - start_total1) / start_total1 * 100
 percent_change_non_s_and_e
 ```
@@ -686,13 +708,5 @@ transpose_data <- function(df) {
     geom_line(aes(color = `S&E or not`))
   return(plot)
 }
-```
-
-```{r}
-# transpose_data(df2_f)
-```
-
-```{r}
-# transpose_data(df2_m)
 ```
 
